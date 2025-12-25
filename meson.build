@@ -22,14 +22,27 @@ protocol_sources = custom_target(
   command: [scanner, '@INPUT@', 'wlr-data-control-unstable-v1-protocol'],
 )
 
-sources = files(
+xdcopy_sources = files(
   './src/util.c',
   './src/xdcopy.c',
 )
 
+xdpaste_sources = files(
+  './src/util.c',
+  './src/xdpaste.c',
+)
+
 executable(
   'xdcopy',
-  [sources, protocol_sources],
+  [xdcopy_sources, protocol_sources],
+  protocol_sources,
+  dependencies: xdwayland_dep,
+  install: true,
+)
+
+executable(
+  'xdpaste',
+  [xdpaste_sources, protocol_sources],
   protocol_sources,
   dependencies: xdwayland_dep,
   install: true,

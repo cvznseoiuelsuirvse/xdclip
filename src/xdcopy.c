@@ -1,10 +1,7 @@
-#include <assert.h>
 #include <getopt.h>
 #include <limits.h>
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/stat.h>
 #include <unistd.h>
 #include <xdwayland-client.h>
 #include <xdwayland-core.h>
@@ -15,7 +12,7 @@
 
 #define ENSURE_RESULT(n)                                                       \
   if ((n) == -1)                                                               \
-  __abort(data)
+  __abort(data, 1)
 
 #define ROUNDTRIP ENSURE_RESULT(xdwl_roundtrip(data->proxy))
 
@@ -43,17 +40,17 @@ void print_help() {
   printf("  -h, --help    show this message\n");
   printf("  -f, --file    copy file\n");
   printf("\n");
-  printf("  noargs        copy from stdin\n");
-  printf("  DATA          copy DATA\n");
+  printf("  it will copy from stdin if no arguments specified.\n");
+  printf("  otherwise copy first argument\n");
 }
 
-void __abort(struct data *data) {
+void __abort(struct data *data, int exitcode) {
   xdwl_error_print();
   if (data->proxy)
     xdwl_proxy_destroy(data->proxy);
   if (data->buffer)
     free(data->buffer);
-  exit(1);
+  exit(exitcode);
 }
 
 void handle_wl_display_delete_id(void *userdata, xdwl_arg *args) {
@@ -64,7 +61,7 @@ void handle_wl_display_delete_id(void *userdata, xdwl_arg *args) {
 
   if ((xdwl_object_unregister(proxy, o_id)) == -1) {
     __print_error("xdcopy", "Failed to unregister %d\n", o_id);
-    __abort(data);
+    __abort(data, 1);
   }
 }
 
@@ -81,7 +78,7 @@ void handle_wl_display_error(void *userdata, xdwl_arg *args) {
 
   __print_error("xdcopy", "%s#%d (code %d): %s\n", object_name, object_id, code,
                 message);
-  __abort(data);
+  __abort(data, 1);
 }
 
 void handle_wlr_data_control_device_data_offer(void *userdata, xdwl_arg *args) {
@@ -91,7 +88,7 @@ void handle_wlr_data_control_device_data_offer(void *userdata, xdwl_arg *args) {
   xdwl_id new_id = args[1].u;
 
   if (xdwl_object_register(proxy, new_id, "zwlr_data_control_offer_v1") == 0)
-    __abort(data);
+    __abort(data, 1);
 }
 
 void handle_wlr_data_control_source_send(void *userdata, xdwl_arg *args) {
@@ -107,7 +104,7 @@ void handle_wlr_data_control_source_send(void *userdata, xdwl_arg *args) {
                   "failed to write %d bytes to fd %d\n",
                   data->size, fd, written);
     close(fd);
-    __abort(data);
+    __abort(data, 1);
   };
 
   close(fd);
@@ -115,9 +112,7 @@ void handle_wlr_data_control_source_send(void *userdata, xdwl_arg *args) {
 
 void handle_wlr_data_control_source_cancelled(void *userdata, xdwl_arg *args) {
   struct data *data = userdata;
-  xdwl_proxy_destroy(data->proxy);
-  free(data->buffer);
-  exit(0);
+  __abort(data, 0);
 }
 
 void handle_wl_registry_global(void *userdata, xdwl_arg *args) {
@@ -134,7 +129,7 @@ void handle_wl_registry_global(void *userdata, xdwl_arg *args) {
 
     object_id = xdwl_object_register(proxy, 0, interface);
     if (object_id == 0) {
-      __abort(data);
+      __abort(data, 1);
     }
 
     xdwl_registry_bind(proxy, 0, name, interface, version, object_id);
@@ -197,7 +192,7 @@ void assign_mimes(struct data *data) {
 }
 
 int process_stdin(struct data *data) {
-  size_t buffer_size = 1024;
+  size_t buffer_size = 0x1000;
   data->buffer = malloc(buffer_size);
 
   char ch;
@@ -206,7 +201,7 @@ int process_stdin(struct data *data) {
       buffer_size *= 2;
       char *_buffer = realloc(data->buffer, buffer_size);
       if (!_buffer) {
-        __print_error("xdcopy", "failed to realloc %d bytes: \n", buffer_size);
+        __print_error("xdcopy", "failed to realloc %d bytes\n", buffer_size);
         perror("realloc");
         free(data->buffer);
         return 0;
@@ -253,7 +248,7 @@ xdwl_proxy *init(struct data *data) {
       xdwl_object_register(proxy, 0, "zwlr_data_control_device_v1");
 
   if (zwlr_data_control_device_id == 0)
-    __abort(data);
+    __abort(data, 1);
 
   struct xdzwlr_data_control_device_v1_event_handlers wlr_data_control_device =
       {
@@ -265,7 +260,7 @@ xdwl_proxy *init(struct data *data) {
 
   xdwl_object *wl_seat_object = xdwl_object_get_by_name(data->proxy, "wl_seat");
   if (!wl_seat_object)
-    __abort(data);
+    __abort(data, 1);
 
   xdzwlr_data_control_manager_v1_get_data_device(
       proxy, 0, zwlr_data_control_device_id, wl_seat_object->id);
@@ -275,8 +270,8 @@ xdwl_proxy *init(struct data *data) {
   xdwl_id zwlr_data_control_source_id =
       xdwl_object_register(proxy, 0, "zwlr_data_control_source_v1");
 
-  if (zwlr_data_control_device_id == 0)
-    __abort(data);
+  if (zwlr_data_control_source_id == 0)
+    __abort(data, 1);
 
   struct xdzwlr_data_control_source_v1_event_handlers wlr_data_control_source =
       {
@@ -299,7 +294,7 @@ xdwl_proxy *init(struct data *data) {
       xdwl_object_get_by_name(data->proxy, "zwlr_data_control_source_v1");
 
   if (!wlr_data_control_source_object) {
-    __abort(data);
+    __abort(data, 1);
   }
 
   xdzwlr_data_control_device_v1_set_selection(
@@ -379,14 +374,12 @@ int main(int argc, char *argv[]) {
   }
 
   init(&data);
-  if (fork() != 0) {
-    __abort(&data);
-    return 1;
+  if (fork() > 0) {
+    __abort(&data, 0);
 
   } else {
     while (xdwl_dispatch(data.proxy) != -1)
       ;
-    __abort(&data);
-    return 0;
+    __abort(&data, 0);
   }
 }
