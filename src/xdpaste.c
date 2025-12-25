@@ -118,6 +118,7 @@ void handle_wlr_data_control_device_selection(void *userdata, xdwl_arg *args) {
   if (get_data(data) == 0)
     goto out;
   ;
+  close(data->rfd);
 
   if (write(1, data->buffer, data->size) == -1) {
     __print_error("xdpaste", "Failed to write to stdout\n");
@@ -126,7 +127,6 @@ void handle_wlr_data_control_device_selection(void *userdata, xdwl_arg *args) {
     write(1, "\n", 1);
 
 out:
-  close(data->rfd);
   __abort(data, 0);
 }
 
