@@ -80,7 +80,7 @@ void handle_wl_display_delete_id(void *userdata, xdwl_arg *args) {
   size_t o_id = args[1].u;
 
   if ((xdwl_object_unregister(proxy, o_id)) == -1) {
-    __print_error("xdpaste", "Failed to unregister %d\n", o_id);
+    __print_error("xdpaste", "failed to unregister %d\n", o_id);
     __abort(data, 1);
   }
 }
@@ -105,7 +105,7 @@ void handle_wlr_data_control_device_selection(void *userdata, xdwl_arg *args) {
   struct data *data = userdata;
   int fildes[2];
   if (pipe(fildes) == -1) {
-    __print_error("xdpaste", "Failed to pipe()\n");
+    __print_error("xdpaste", "failed to pipe()\n");
     goto out;
   };
 
@@ -121,7 +121,7 @@ void handle_wlr_data_control_device_selection(void *userdata, xdwl_arg *args) {
   close(data->rfd);
 
   if (write(1, data->buffer, data->size) == -1) {
-    __print_error("xdpaste", "Failed to write to stdout\n");
+    __print_error("xdpaste", "failed to write to stdout\n");
   };
   if (data->add_newline)
     write(1, "\n", 1);
@@ -134,7 +134,7 @@ void handle_wlr_data_control_offer_offer(void *userdata, xdwl_arg *args) {
   struct data *data = userdata;
   const char *mime = args[1].s;
 
-  if (!data->mime) {
+  if (strcmp("text/plain;charset=utf-8", mime) == 0 || !data->mime) {
     data->mime = strdup(mime);
   }
 }
